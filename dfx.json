@@ -1,0 +1,20 @@
+{
+  "canisters": {
+    "fs_test_backend": {
+      "build": "npx azle fs_test_backend",
+      "candid": "src/fs_test_backend/fs_test_backend.did",
+      "gzip": true,
+      "main": "src/fs_test_backend/src/index.ts",
+      "type": "custom",
+      "wasm": ".azle/fs_test_backend/fs_test_backend.wasm"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
