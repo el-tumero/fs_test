@@ -1,6 +1,11 @@
-import { Server } from 'azle';
+import { LayersModel } from '@tensorflow/tfjs';
+import { Server, nat8, StableBTreeMap, text  } from 'azle';
 import bodyParser from 'body-parser';
 import express, { Request } from 'express';
+import * as tf from '@tensorflow/tfjs'
+import { all_model_info } from './gan'
+
+
 import {
     existsSync,
     mkdirSync,
@@ -13,12 +18,28 @@ import {
 } from 'fs';
 import { mkdir, readFile, rmdir, unlink, writeFile } from 'fs/promises';
 
-const chunks:string[] = []
+// let map = StableBTreeMap<nat8, text>(0);
+
+
+let chunks:Uint8Array[] = []
+
+let model:LayersModel
+
+let lastChunkLen = 0
+
+let num = 0
+
+
+const shard = new Uint8Array(3539134)
 
 export default Server(() => {
     const app = express();
 
-    app.use(bodyParser.text())
+    app.use(express.raw({
+        inflate: true,
+        limit: '50mb',
+        type: () => true, // this matches all content types
+      }))
     
 
     app.get(
@@ -28,19 +49,26 @@ export default Server(() => {
         }
     )
 
+    app.get(
+        '/create-shard',
+        (req: Request<any, any, any, {id: number}>, res) => {
+            writeFileSync(`group1-shard${req.query.id}of4.bin`, Buffer.from(shard))
+            res.send("created!")
+        }
+    )
+
 
     app.post(
         '/upload',
-        (req: Request<any, any, any, {id: number}>, res) => {
+        (req: Request<any, any, any, {id: number}>, res) => {    
             if(!req.query.id) {
                 res.send("chunk not added - wrong id!")
                 return
             }
-            if(typeof chunks[req.query.id] === 'undefined') {
-                chunks[req.query.id] = req.body
-            } else {
-                chunks[req.query.id] = chunks[req.query.id].concat(req.body)
-            }
+
+            shard.set(req.body, lastChunkLen)
+            lastChunkLen = req.body.length
+            
 
             res.send("chunk added!")
         }
@@ -65,25 +93,45 @@ export default Server(() => {
         }
     )
 
+    // app.get(
+    //     '/remove',
+    //     (req: Request<any, any, any, any>, res) => {
+    //         map.remove(1)
+    //         map.remove(2)
+    //         map.remove(3)
+    //         map.remove(4)
+    //         res.send("removed!")
+    //     }
+    // )
+    // app.get(
+    //     '/asm-chunks',
+    //     (req: Request<any, any, any, {id: number}>, res) => {
+    //         // assemble chunks
+    //         const buf = Buffer.from(chunks[req.query.id], "base64")
+    //         // writeFileSync(`group1-shard${req.query.id}of4.bin`, buf, "binary")
+    //         res.send("OK!")
+    //     }
+    // )
+
+    // app.get(
+    //     '/show-chunks',
+    //     (req: Request<any, any, any, {id: number}>, res) => {
+    //         console.log(map.get(req.query.id))
+    //         // console.log(map.get(req.query.id).Some?.length)
+    //         // console.log(map.get(req.query.id).Some?.slice(0, 10))
+    //         res.send("done!")
+    //     }
+    // )
+
     app.get(
-        '/asm-chunks',
+        '/load-model',
         (req: Request<any, any, any, any>, res) => {
-            // assemble chunks
-            chunks.forEach((chunk, i) => {
-                const buf = Buffer.from(chunk, "base64")
-                writeFileSync(`group1-shard${i}of4.bin`, buf, "binary")
+            tf.loadLayersModel(all_model_info["dcgan64"].model_url).then(loadedModel => {
+                model = loadedModel
             })
+            res.send("model loaded!")
         }
     )
-
-    app.get(
-        '/show-chunks',
-        (req: Request<any, any, any, any>, res) => {
-            res.send(chunks.toString())
-        }
-    )
-
-    
 
     // app.get(
     //     '/ls',

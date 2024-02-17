@@ -16,6 +16,7 @@
     "src/fs_test_backend"
   ],
   "dependencies": {
+    "@tensorflow/tfjs": "^4.17.0",
     "@types/connect-busboy": "^1.0.3",
     "@types/multer": "^1.4.11",
     "body-parser": "^1.20.2",
