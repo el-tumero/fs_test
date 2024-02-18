@@ -17,11 +17,13 @@
   ],
   "dependencies": {
     "@tensorflow/tfjs": "^4.17.0",
+    "@tensorflow/tfjs-node": "^4.17.0",
     "@types/connect-busboy": "^1.0.3",
     "@types/multer": "^1.4.11",
     "body-parser": "^1.20.2",
     "connect-busboy": "^1.0.0",
     "express-busboy": "^10.1.0",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "to-readable-stream": "^4.0.0"
   }
 }

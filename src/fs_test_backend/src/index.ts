@@ -1,8 +1,9 @@
 import { LayersModel } from '@tensorflow/tfjs';
-import { Server, nat8, StableBTreeMap, text  } from 'azle';
+import { Server, nat8, StableBTreeMap, text, query  } from 'azle';
 import bodyParser from 'body-parser';
 import express, { Request } from 'express';
 import * as tf from '@tensorflow/tfjs'
+import { fileSystem } from './file_system'
 import { all_model_info } from './gan'
 
 
@@ -30,7 +31,48 @@ let lastChunkLen = 0
 let num = 0
 
 
-const shard = new Uint8Array(3539134)
+
+const shards:Uint8Array[] = [
+    new Uint8Array(3539134), 
+    new Uint8Array(3539134), 
+    new Uint8Array(3539134),
+    new Uint8Array(3539134),
+    new Uint8Array(3036106),
+]
+
+
+function toReadableStream(value:any) {
+	return new ReadableStream({
+		start(controller) {
+			controller.enqueue(value);
+			controller.close();
+		},
+	});
+}
+
+async function myFetch(input: string):Promise<Response>{
+    
+    let contents: string | Buffer = ""
+    if(input.includes(".json")) contents = readFileSync(input)
+
+    return new Promise<Response>((resolve, reject) => {
+
+        //@ts-ignore
+        resolve({status: 200, ok:true, json: () => JSON.parse(contents)})
+    })           
+}
+
+
+
+// const MyIOHandler = {
+//     load: () => {
+//         console.log("read")
+//         const contents = readFileSync("model.json", "utf-8")
+//         return JSON.parse(contents) 
+//     }
+// }
+
+
 
 export default Server(() => {
     const app = express();
@@ -52,7 +94,7 @@ export default Server(() => {
     app.get(
         '/create-shard',
         (req: Request<any, any, any, {id: number}>, res) => {
-            writeFileSync(`group1-shard${req.query.id}of4.bin`, Buffer.from(shard))
+            writeFileSync(`group1-shard${req.query.id}of4.bin`, Buffer.from(shards[req.query.id]))
             res.send("created!")
         }
     )
@@ -60,16 +102,17 @@ export default Server(() => {
 
     app.post(
         '/upload',
-        (req: Request<any, any, any, {id: number}>, res) => {    
-            if(!req.query.id) {
+        (req: Request<any, any, any, {shardId: number, chunkId: number}>, res) => {    
+            if(!req.query.shardId) {
                 res.send("chunk not added - wrong id!")
                 return
             }
+            if(req.query.chunkId == 0) lastChunkLen = 0
 
-            shard.set(req.body, lastChunkLen)
+            shards[req.query.shardId].set(req.body, lastChunkLen)
             lastChunkLen = req.body.length
+            // console.log(lastChunkLen)
             
-
             res.send("chunk added!")
         }
     )
@@ -93,58 +136,22 @@ export default Server(() => {
         }
     )
 
-    // app.get(
-    //     '/remove',
-    //     (req: Request<any, any, any, any>, res) => {
-    //         map.remove(1)
-    //         map.remove(2)
-    //         map.remove(3)
-    //         map.remove(4)
-    //         res.send("removed!")
-    //     }
-    // )
-    // app.get(
-    //     '/asm-chunks',
-    //     (req: Request<any, any, any, {id: number}>, res) => {
-    //         // assemble chunks
-    //         const buf = Buffer.from(chunks[req.query.id], "base64")
-    //         // writeFileSync(`group1-shard${req.query.id}of4.bin`, buf, "binary")
-    //         res.send("OK!")
-    //     }
-    // )
-
-    // app.get(
-    //     '/show-chunks',
-    //     (req: Request<any, any, any, {id: number}>, res) => {
-    //         console.log(map.get(req.query.id))
-    //         // console.log(map.get(req.query.id).Some?.length)
-    //         // console.log(map.get(req.query.id).Some?.slice(0, 10))
-    //         res.send("done!")
-    //     }
-    // )
-
     app.get(
         '/load-model',
         (req: Request<any, any, any, any>, res) => {
-            tf.loadLayersModel(all_model_info["dcgan64"].model_url).then(loadedModel => {
-                model = loadedModel
+
+            const handler = fileSystem("file://model.json")
+            tf.loadLayersModel(handler).then(loadedModel => {
+                console.log(loadedModel.name)
+            }).catch(err => {
+                console.log(`err: ${err as Error}`)
             })
             res.send("model loaded!")
         }
     )
 
-    // app.get(
-    //     '/ls',
-    //     (req: Request<any, any, any, any>, res) => {
-    //         const output:string[] = []
-    //         readdir(".", (err, files) => {
-    //             files.forEach(file => {
-    //               output.push(file)
-    //             });
-    //         });
-    //         res.send(output.toString())
-    //     }
-    // )
 
     return app.listen();
 });
+
+
